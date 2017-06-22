@@ -1,0 +1,296 @@
+
+#include <Adafruit_GFX.h>
+#include "Adafruit_SH1106.h"
+
+#define OLED_RESET 15
+Adafruit_SH1106 display(OLED_RESET);
+
+#define LCD_WIDTH 64
+#define LCD_HEIGHT 32
+#define LCD_HEIGHT8 (LCD_HEIGHT >> 3)
+#define K 2
+
+#define map(i, j) (i + LCD_WIDTH*j)
+#define map_x(i, j, k) (i)
+#define map_y(i, j, k) (j*8+k)
+#define map_i(x, y) (x)
+#define map_j(x, y) (y/8)
+#define map_k(x, y) (y%8)
+
+#define for_i for (int i = 0; i < LCD_WIDTH; i++)
+#define for_j for (int j = 0; j < LCD_HEIGHT8; j++)
+#define for_k for (int k = 0; k < 8; k++)
+#define for_n for (int n = 0; n < 8; n++)
+
+#define for_x for (int x = 0; x < LCD_WIDTH; x++)
+#define for_y for (int y = 0; y < LCD_HEIGHT; y++)
+#define for_y_a for (int y_a = y - 1; y_a <= y + 1; y_a++)
+#define for_x_a for (int x_a = x - 1; x_a <= x + 1; x_a++)
+
+#define bit_read(matrix, i, j, k) bitRead(matrix[map(i, j)], k)
+#define bit_set(matrix, i, j, k) bitSet(matrix[map(i, j)], k)
+#define bit_clear(matrix, i, j, k) bitClear(matrix[map(i, j)], k)
+
+#define bit_set_xy(matrix, x, y) bit_set(matrix, map_i(x, y),  map_j(x, y), map_k(x, y))
+#define bit_read_xy(matrix, x, y) bit_read(matrix, map_i(x, y),  map_j(x, y), map_k(x, y))
+#define bit_clear_xy(matrix, x, y) bit_clear(matrix, map_i(x, y),  map_j(x, y), map_k(x, y));
+
+#define pixel_set(i, j, k) display.drawPixel(i, j*8+k, BLACK)
+#define pixel_unset(i, j, k) display.drawPixel(i, j*8+k, WHITE)
+//#define pixel_map(i, j, k) display.drawPixel(i, j*8+k, bit_read(matrix, i, j, k) == 1 ? WHITE : BLACK)
+
+#define between(n, a, b) ((n >= a) && (n <= b))
+
+#define NORTH 0
+#define NORTHEAST 1
+#define EAST 2
+#define SOUTHEAST 3
+#define SOUTH 4
+#define SOUTHWEST 5
+#define WEST 6
+#define NORTHWEST 7
+
+#define RAND_RANGE 255
+
+#define BtnExtra2 9
+#define BtnExtra  12
+#define BatteryIn A3
+#define VoltageIn A2
+
+unsigned char matrix[LCD_WIDTH * LCD_HEIGHT8] = {0};
+unsigned char matrix_new[LCD_WIDTH * LCD_HEIGHT8] = {0};
+
+const unsigned char PROGMEM logo [] = {
+0x00, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x40, 0x08,
+0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x47, 0x88, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x01, 0x00, 0x47, 0x88, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x5F, 0xE8, 0x02, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x5F, 0xE8, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+0x5F, 0xE8, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x47, 0x88, 0x02, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x01, 0x00, 0x47, 0x88, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x40, 0x08,
+0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x01, 0x00, 0x40, 0x08, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x40, 0x08, 0xE2, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x40, 0x08, 0xE2, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+0x40, 0x0B, 0xFA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x40, 0x0B, 0xFA, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x01, 0x00, 0x40, 0x0B, 0xFA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x40, 0x0B,
+0xFA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x40, 0x08, 0xE2, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x01, 0x00, 0x40, 0x08, 0xE2, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x40, 0x08, 0x02, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+0x40, 0x08, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3E, 0x47, 0x89, 0xF2, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x01, 0x7F, 0x47, 0x8B, 0xFA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x7F, 0x5F, 0xEB,
+0xFA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x7F, 0x5F, 0xEB, 0xFA, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x01, 0x7F, 0x5F, 0xEB, 0xFA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x7F, 0x47, 0x8B, 0xFA, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x01, 0x3E, 0x47, 0x89, 0xF2, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+0x40, 0x08, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x06, 0x10, 0x67,
+0xC0, 0xF1, 0xF0, 0x82, 0x7C, 0xF8, 0x19, 0x86, 0x18, 0x64, 0x01, 0x99, 0x00, 0x82, 0x40, 0x80,
+0x10, 0x0A, 0x18, 0xE4, 0x01, 0x09, 0x00, 0x82, 0x40, 0x80, 0x30, 0x0B, 0x1C, 0xA7, 0xC3, 0x0D,
+0xF0, 0x82, 0x7C, 0xF8, 0x33, 0x99, 0x15, 0xA4, 0x03, 0x0D, 0x00, 0x82, 0x40, 0x80, 0x10, 0x9F,
+0x95, 0x24, 0x01, 0x09, 0x00, 0x82, 0x40, 0x80, 0x19, 0x90, 0x93, 0x24, 0x01, 0x99, 0x00, 0x82,
+0x40, 0x80, 0x0F, 0xA0, 0x92, 0x27, 0xC0, 0xF1, 0x00, 0xFA, 0x40, 0xF8, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+void initialize_matrix() {
+  for_x {
+    for_y {
+      char rand = random(RAND_RANGE);
+      if (between(rand, 0, RAND_RANGE / 2)) {
+        bit_set_xy(matrix, x, y);
+      }
+    }
+  }
+}
+
+// implemented using dubaiss' "neighbours XXX" algorithm
+void evolve_matrix() {
+
+  // new state
+  unsigned char neighbour[8] = {0};
+  unsigned char byte_cell;
+  unsigned char byte_cell_new;
+  unsigned char byte_cell_count;
+  // calculate new state
+
+  for_i {
+    for_j {
+
+      byte_cell = matrix[map(i, j)];
+
+      /* * get each bit's neighbour one byte at a time * */
+      /* east and west */
+      neighbour[WEST] = 0b00000000;
+      if (i > 0) {
+        neighbour[WEST] = matrix[map((i - 1), j)];
+      }
+
+      neighbour[EAST] = 0b00000000;
+      if (i < (LCD_WIDTH - 1)) {
+        neighbour[EAST] = matrix[map((i + 1), j)];
+      }
+
+      /* north */
+      neighbour[NORTH] = 0b00000000;
+      neighbour[NORTHEAST] = 0b00000000;
+      neighbour[NORTHWEST] = 0b00000000;
+      if (j > 0) {
+        neighbour[NORTH] = matrix[map(i, j - 1)];
+        if (i > 0) {
+          neighbour[NORTHWEST] = matrix[map(i - 1, j - 1)];
+        }
+        if (i < (LCD_WIDTH - 1)) {
+          neighbour[NORTHEAST] = matrix[map(i + 1, j - 1)];
+        }
+      }
+      neighbour[NORTH] = (byte_cell << 1) | ((neighbour[NORTH] & 0b10000000) >> 7);
+      neighbour[NORTHEAST] = (neighbour[EAST] << 1) | ((neighbour[NORTHEAST] & 0b1000000) >> 7);
+      neighbour[NORTHWEST] = (neighbour[WEST] << 1) | ((neighbour[NORTHWEST] & 0b1000000) >> 7);
+
+      /* south */
+      neighbour[SOUTH] = 0b00000000;
+      neighbour[SOUTHEAST] = 0b00000000;
+      neighbour[SOUTHWEST] = 0b00000000;
+      if (j < (LCD_HEIGHT8 - 1)) {
+        neighbour[SOUTH] = matrix[map(i, j + 1)];
+        if (i > 0) {
+          neighbour[SOUTHWEST] = matrix[map(i - 1, j + 1)];
+        }
+        if (i < (LCD_WIDTH - 1)) {
+          neighbour[SOUTHEAST] = matrix[map(i + 1, j + 1)];
+        }
+      }
+      neighbour[SOUTH] = ((neighbour[SOUTH] & 0b00000001) << 7) | (byte_cell >> 1);
+      neighbour[SOUTHEAST] = ((neighbour[SOUTHEAST] & 0b00000001) << 7) | (neighbour[EAST] >> 1);
+      neighbour[SOUTHWEST] = ((neighbour[SOUTHWEST] & 0b00000001) << 7) | (neighbour[WEST] >> 1);
+
+      /* calculate each bit of next gen */
+      byte_cell_new = 0b00000000;
+
+      for_k {
+        byte_cell_count = 0;
+        for_n {
+          byte_cell_count += (neighbour[n] & 0b00000001);
+        }
+
+        byte_cell_new >>= 1;
+        if ((byte_cell_count == 3) || ((byte_cell_count == 2) && (byte_cell & 0b00000001))) {
+          byte_cell_new |= 0b10000000;
+        }
+
+        for_n {
+          neighbour[n] >>= 1;
+        }
+        byte_cell >>= 1;
+      }
+
+      matrix_new[map(i, j)] = byte_cell_new;
+    }
+  }
+
+  // apply new state
+  for_i {
+    for_j {
+      matrix[map(i, j)] = matrix_new[map(i, j)];
+    }
+  }
+
+}
+
+void update_display() {
+
+  for_i {
+    for_j {
+      for_k {
+        pixel_map(i, j, k);
+      }
+    }
+  }
+  display.display();
+}
+
+void setup()   {
+
+  analogReference(INTERNAL);
+
+  // random seed
+  randomSeed(analogRead(1));
+
+  // initialize display
+  display.begin(SH1106_SWITCHCAPVCC, 0x3C);
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+  display.setTextSize(1);
+
+  display.drawBitmap(24, 8,  logo, 80, 48, 1);
+  display.display();
+  delay(1000);
+
+  // clears the screen and buffer
+  display.clearDisplay();
+
+  // initialize matrix
+  initialize_matrix();
+  update_display();
+
+  display.display();
+
+  pinMode(BtnExtra,  INPUT);
+  pinMode(BtnExtra2,  INPUT);
+
+  delay(300);
+}
+
+void loop() {
+  
+  boolean static isBatteryShown = false;
+
+  if(digitalRead(BtnExtra2)) {
+    delay(100);
+    display.clearDisplay();
+
+    initialize_matrix();
+    update_display();
+    delay(300);
+    return; 
+  }
+  
+  if(digitalRead(BtnExtra)) {
+    showBattery();
+    isBatteryShown = true;
+  } else {
+    if(isBatteryShown) {
+      delay(200);
+      display.clearDisplay();
+      isBatteryShown = false;
+    }
+
+    update_display();
+    evolve_matrix();
+  }
+}
+
+void pixel_map(char i, char j, char k) {
+  for (char a = 0; a < K; a++) {
+    for (char b = 0; b < K; b++) {
+      display.drawPixel(i * K + a, (j * 8 + k) * K + b, bit_read(matrix, i, j, k) == 1 ? WHITE : BLACK);
+    }
+  }
+}
+
+void showBattery() {
+  int battery = analogRead(BatteryIn);
+  int voltage = analogRead(VoltageIn);
+
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.print("Battery: ");
+  display.println(battery);
+
+  display.print("Voltage: ");
+  display.println(voltage);
+  
+  display.display();
+  delay(200);
+}
